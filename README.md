@@ -1,4 +1,5 @@
 # directadjust
+[![DOI](https://zenodo.org/badge/1333114488.svg)](https://doi.org/10.5281/zenodo.21919198)
 
 Data-driven covariate adjustment, certified directly from conditional
 independence tests, without learning a causal graph as an intermediate
