@@ -58,8 +58,8 @@ procedures; see the paper.
 
 `r1_combine()` reduces each per-treatment set to a minimal adjustment set
 through the paper's Lemma 8 by default, as Theorem 7 requires;
-`prune = "witness"` reproduces the simulation study's original pruning
-protocol instead (see `?r1_combine` for the distinction).
+`prune = "witness"` uses a faster heuristic instead (see `?r1_combine`
+for the distinction).
 
 The default testing level is `alpha = 0.05`, the level of the paper's
 simulations. Dependence and independence can also be declared at different
