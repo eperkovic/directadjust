@@ -1,0 +1,12 @@
+{
+  "title": "directadjust: Data-Driven Adjustment for Multiple Treatments",
+  "description": "R package implementing the R1 Build and R1 Combine procedures and the c-equivalence extension of LaPlante, Triantafillou and Perkovic, 'Data-Driven Adjustment for Multiple Treatments' (Journal of Causal Inference), together with the paper's full simulation study.",
+  "creators": [
+    {"name": "LaPlante, Sara", "affiliation": "University of Washington"},
+    {"name": "Triantafillou, Sofia", "affiliation": "University of Crete"},
+    {"name": "Perkovic, Emilija", "affiliation": "University of Washington"}
+  ],
+  "license": "MIT",
+  "upload_type": "software",
+  "keywords": ["causal inference", "covariate adjustment", "conditional independence", "R package"]
+}

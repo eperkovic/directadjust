@@ -1,0 +1,34 @@
+directadjust simulation environment, captured 2026-08-13 14:37 CEST
+----------------------------------------------------------------------
+
+## R
+
+R version 4.5.2 (2025-10-31)
+Platform: aarch64-apple-darwin20
+
+## R packages
+
+directadjust   NOT INSTALLED
+pcalg          2.7.12
+dagitty        0.3.4
+ggplot2        4.0.2
+causalDisco    1.1.0
+reticulate     1.46.0
+graph          1.86.0
+RBGL           1.84.0
+knitr          1.51
+rmarkdown      2.30
+testthat       3.3.2
+
+## Python / py-tetrad
+
+python:    /Users/ema/.virtualenvs/r-tetrad/bin/python
+version:   3.12
+py-tetrad: 0.1.2
+
+## Java
+
+openjdk version "21.0.11" 2026-04-21 LTS
+OpenJDK Runtime Environment Corretto-21.0.11.10.1 (build 21.0.11+10-LTS)
+OpenJDK 64-Bit Server VM Corretto-21.0.11.10.1 (build 21.0.11+10-LTS, mixed mode, sharing)
+JAVA_HOME: /Users/ema/Library/Caches/org.R-project.R/R/rJavaEnv/installed/macos/aarch64/21

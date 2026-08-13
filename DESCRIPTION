@@ -1,0 +1,37 @@
+Package: directadjust
+Title: Data-Driven Adjustment for Multiple Treatments
+Version: 0.2.1
+Authors@R: c(
+    person("Sara", "LaPlante", role = "aut"),
+    person("Sofia", "Triantafillou", role = "aut"),
+    person("Emilija", "Perkovic", role = c("aut", "cre"),
+           email = "perkovic@uw.edu"))
+Description: Certifies valid covariate adjustment sets for two treatments
+    directly from conditional independence tests, without learning a causal
+    graph as an intermediate object. Implements the R1 Build and R1 Combine
+    procedures (Theorems 5 and 7 of LaPlante, Triantafillou and Perkovic,
+    "Data-Driven Adjustment for Multiple Treatments", Journal of Causal
+    Inference), together with a joint-effect estimator over the certified
+    sets. The paper's simulation study ships under inst/simulation, with its
+    saved results under inst/results.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Depends: R (>= 4.0)
+URL: https://github.com/eperkovic/directadjust
+BugReports: https://github.com/eperkovic/directadjust/issues
+Imports:
+    pcalg,
+    utils,
+    stats
+VignetteBuilder: knitr
+Suggests:
+    knitr,
+    rmarkdown,
+    causalDisco,
+    dagitty,
+    ggplot2,
+    reticulate,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0

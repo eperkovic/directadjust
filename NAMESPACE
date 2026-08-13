@@ -1,0 +1,15 @@
+# Generated manually; regenerate with roxygen2 (devtools::document()) if the
+# roxygen comments change.
+export(make_ci_tester)
+export(r1_entner)
+export(r1_build)
+export(r1_combine)
+export(c_equivalent)
+export(estimate_joint_effect)
+S3method(print, r1_sets)
+importFrom(pcalg, gaussCItest)
+importFrom(stats, cor)
+importFrom(stats, lm)
+importFrom(stats, coef)
+importFrom(stats, reformulate)
+importFrom(utils, combn)

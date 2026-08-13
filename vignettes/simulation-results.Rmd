@@ -1,0 +1,216 @@
+---
+title: "Section 5, reproduced: the simulation study"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Section 5, reproduced: the simulation study}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>",
+                      fig.width = 8, fig.height = 5)
+has_gg <- requireNamespace("ggplot2", quietly = TRUE)
+```
+
+This vignette reproduces the figures and tables of Section 5 of the paper and
+its supplement, computed live from the simulation results that ship with the
+package. The document is therefore itself a check that the reported numbers
+follow from the released runs. The full study can be rerun (about an hour; the
+graph-based arms additionally require Python and a Java runtime for py-tetrad)
+with
+
+```{r rerun, eval = FALSE}
+source(system.file("simulation", "jci_simulation_rebuild.R",
+                   package = "directadjust"))
+```
+
+## Design
+
+Each replication draws a 15-node DAG with a fixed causal ordering: five latent
+variables, seven observed covariates $W_1, \dots, W_7$, then $X_1$, $X_2$, $Y$.
+Each node draws its parent count uniformly on
+$\{0, \dots, \min(\text{predecessors}, 3)\}$ and its parents uniformly among
+predecessors; the treatment edges $X_1 \to Y$ and $X_2 \to Y$ are present in the
+effect arm and absent otherwise. Linear-Gaussian data are generated with edge
+coefficients uniform on $\pm[0.1, 1.5]$ and error variances uniform on
+$[0.5, 1]$, at $n \in \{100; 1{,}000; 10{,}000\}$.
+
+Settings are classified as in the paper: Setting 1 keeps effect-arm models whose
+ground-truth tiered PAG (oracle FCI on the true DAG with the four tiers as
+background knowledge) contains a GAC-certifiable adjustment set; Setting 2 keeps
+effect-arm models where it does not; Setting 3 is the no-effect arm, unscreened.
+One hundred models per setting, seed `20260716`.
+
+Four methods run on identical datasets, all at $\alpha = 0.05$, the paper's
+testing level: `r1_build()` and `r1_combine()`, and two graph-based arms,
+namely FCItiers and GFCI, each supplied with the four tiers as background knowledge and each followed
+by the generalized adjustment criterion, with certification computed by dagitty.
+Certified sets are validated against the true DAG.
+
+The R1 Combine arm reduces each certified per-treatment set to a minimal
+adjustment set through the paper's Lemma 8, the package default
+(`prune = "lemma8"`), as Theorem 7 requires. A faster heuristic pruning is
+available as `r1_combine(prune = "witness")`; see `?r1_combine`.
+
+```{r load}
+library(directadjust)
+res <- readRDS(system.file("results", "jci_sim_results.rds",
+                           package = "directadjust"))
+ARMS <- c("R1 Build", "R1 Combine", "FCItiers + GAC", "GFCI + GAC")
+res$method <- as.character(res$method)
+res$method[res$method == "FCItiers (Tetrad)"] <- "FCItiers + GAC"
+res <- subset(res, method %in% ARMS)
+res$method <- factor(res$method, levels = ARMS)
+res$outcome <- factor(res$outcome,
+  levels = c("correct set", "none correct", "negative", "unknown"))
+SETLAB <- c(S1 = "Setting 1", S2 = "Setting 2", S3 = "Setting 3")
+```
+
+```{r palette, eval = has_gg}
+library(ggplot2)
+ORIG_FILL <- scale_fill_manual(values = c(
+  "correct set"  = "#0072BD", "none correct" = "#7E7E7E",
+  "negative"     = "#D95319", "unknown"      = "#EDB120"),
+  labels = c("correct set" = "Correct Set", "none correct" = "None Correct",
+             "negative" = "Negative", "unknown" = "Unknown"))
+STACK <- geom_bar(position = position_stack(reverse = TRUE))
+```
+
+## Figure 6: decision outcomes, Settings 1 and 2
+
+```{r fig6, eval = has_gg}
+s12 <- subset(res, setting != "S3")
+ggplot(s12, aes(factor(n), fill = outcome)) +
+  STACK + ORIG_FILL +
+  facet_grid(setting ~ method, labeller = labeller(setting = SETLAB)) +
+  theme_minimal() + theme(legend.position = "bottom") +
+  labs(x = "sample size", y = "count", fill = NULL)
+```
+
+The percentages quoted in Section 5.3 for Setting 1:
+
+```{r sett1-pct}
+s1 <- subset(res, setting == "S1")
+knitr::kable(
+  round(100 * tapply(s1$outcome == "correct set",
+                     list(s1$method, s1$n), mean)),
+  caption = "Share of the 100 datasets in which a correct set was found (%).")
+```
+
+## Figure 7: estimation error, Settings 1 and 2
+
+Whenever a method returns sets, its estimate averages the sum of the two
+treatment coefficients from the regression of $Y$ on both treatments and the
+set, over all returned sets; negative decisions enter at 0.
+
+```{r fig7, eval = has_gg}
+est <- subset(s12, !is.na(est)); est$diff <- est$est - est$true
+ggplot(est, aes(factor(n), diff)) +
+  geom_boxplot() +
+  facet_grid(setting ~ method, labeller = labeller(setting = SETLAB)) +
+  theme_minimal() +
+  labs(x = "sample size", y = "estimated - true effect")
+```
+
+## Mean squared error
+
+One squared error per replication against the model's known true joint effect,
+averaged per cell; runs without an estimate are excluded. These are the figures
+quoted in the estimation paragraph of Section 5.3.
+
+```{r mse}
+est_all <- subset(res, !is.na(est))
+est_all$sqerr <- (est_all$est - est_all$true)^2
+knitr::kable(
+  round(tapply(est_all$sqerr,
+               list(paste(SETLAB[as.character(est_all$setting)],
+                          format(est_all$n, big.mark = ",", trim = TRUE)),
+                    est_all$method), mean), 3),
+  caption = "MSE of the joint-effect estimate, by setting and sample size.")
+```
+
+## Figure 8: running time against the number of covariates
+
+Median seconds per dataset at $n = 1{,}000$, for the full pipeline (graph
+discovery followed by adjustment set enumeration) and for graph discovery alone.
+The graphical approaches must enumerate the adjustment sets of the learned graph
+before an effect can be estimated; our methods do not.
+
+```{r fig8, eval = has_gg}
+sw <- readRDS(system.file("results", "jci_fig8_times.rds",
+                          package = "directadjust"))
+sw$method <- as.character(sw$method)
+sw$method[sw$method == "FCItiers (Tetrad)"] <- "FCItiers + GAC"
+sw <- subset(sw, method %in% ARMS)
+sw$method <- factor(sw$method, levels = ARMS)
+sm <- do.call(rbind, by(sw, list(sw$nW, sw$method), function(d)
+  data.frame(nW = d$nW[1], method = d$method[1],
+             search = median(d$secs_search), total = median(d$secs_total))))
+long <- rbind(
+  data.frame(sm[c("nW", "method")], stage = "Full pipeline", secs = sm$total),
+  data.frame(sm[c("nW", "method")], stage = "Discovery only", secs = sm$search))
+long$stage <- factor(long$stage, levels = c("Full pipeline", "Discovery only"))
+ggplot(long, aes(nW, secs, color = method, linetype = stage)) +
+  geom_line() + geom_point() +
+  scale_linetype_manual(values = c("Full pipeline" = "solid",
+                                   "Discovery only" = "22")) +
+  scale_x_continuous(breaks = sort(unique(long$nW))) +
+  theme_minimal() +
+  labs(x = "number of covariates",
+       y = "median seconds per dataset (n = 1,000)",
+       color = NULL, linetype = NULL)
+```
+
+## Supplement: conditional independence test counts
+
+The appendix table. Counts are exact for every arm: the R methods wrap their
+test functions with counters, and the Tetrad arms count through a proxy
+implementing Tetrad's `IndependenceTest` interface.
+
+```{r ntests}
+nt <- subset(res, n == 10000 & !is.na(ntests))
+tc <- do.call(rbind, by(nt, list(nt$method, nt$setting), function(d)
+  data.frame(Setting = SETLAB[[as.character(d$setting[1])]],
+             Method  = as.character(d$method[1]),
+             Min = min(d$ntests),
+             Q1 = round(quantile(d$ntests, .25)),
+             Median = median(d$ntests),
+             Q3 = round(quantile(d$ntests, .75)),
+             Max = max(d$ntests))))
+tc <- tc[order(tc$Setting, match(tc$Method, ARMS)), ]
+knitr::kable(tc, row.names = FALSE,
+             caption = "Tests per dataset at n = 10,000, over 100 models.")
+```
+
+## Supplement: running time distributions
+
+```{r fig-runtime, eval = has_gg}
+ggplot(res, aes(factor(n), secs)) +
+  geom_boxplot() + scale_y_log10() +
+  facet_grid(setting ~ method, labeller = labeller(setting = SETLAB)) +
+  theme_minimal() +
+  labs(x = "sample size", y = "seconds per dataset (log scale)")
+```
+
+## Supplement: Setting 3 (no treatment effect)
+
+```{r fig1011, eval = has_gg}
+s3 <- subset(res, setting == "S3")
+ggplot(s3, aes(factor(n), fill = outcome)) +
+  STACK + ORIG_FILL + facet_grid(. ~ method) +
+  theme_minimal() + theme(legend.position = "bottom") +
+  labs(x = "sample size", y = "count", fill = NULL)
+est3 <- subset(s3, !is.na(est)); est3$diff <- est3$est - est3$true
+ggplot(est3, aes(factor(n), diff)) +
+  geom_boxplot() + facet_grid(. ~ method) + theme_minimal() +
+  labs(x = "sample size", y = "estimated - true effect")
+```
+
+## A note on certification
+
+All shipped results certify adjustment sets with dagitty rather than
+`pcalg::gac`, which at the time of writing mishandles amenability for joint
+treatments (it passes PAGs in which the second treatment has a circle-start
+edge into the outcome). A minimal reproducible example ships as
+`inst/simulation/gac_bug_repro.R`.
