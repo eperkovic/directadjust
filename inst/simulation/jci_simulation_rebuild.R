@@ -1,4 +1,18 @@
 # jci_simulation_rebuild.R — the simulation study of LaPlante,
+#
+# TIERED-KNOWLEDGE VALIDITY GUARD. The tiers imply hard constraints on the
+# marks of any graph a knowledge-aware search returns: on an edge between
+# nodes of different tiers, the endpoint at the later tier must be an
+# arrowhead (the later node cannot be an ancestor of the earlier one). Not
+# every released Tetrad build enforces this, and a build that drops such
+# marks silently corrupts the Setting 1/2 screen. This script therefore
+# verifies every returned graph against these constraints: the ground-truth
+# screen refuses to run if any repair is needed, and the data arms repair
+# and tally (a correct build needs zero repairs). Verified clean under
+# Tetrad 7.6.11; see session_info.txt. Note that py-tetrad's package version
+# does not identify the bundled Tetrad engine -- use the jar version and
+# SHA-256 recorded in session_info.txt.
+
 # Triantafillou & Perkovic, "Data-Driven Adjustment for Multiple Treatments"
 # (Journal of Causal Inference), Section 5.
 #
@@ -209,6 +223,48 @@ def gt_pag(directed, latents, tiers):
     return str(alg.search())
 ")
   tiers_py <- list(as.list(paste0("W", 1:7)), "X1", "X2", "Y")
+
+  # report which Tetrad actually answered (goes in session_info / the log)
+  invisible(tryCatch(reticulate::py_run_string("
+import importlib.metadata as _md
+try: print('py-tetrad version:', _md.version('py-tetrad'))
+except Exception: print('py-tetrad version: unknown')
+try:
+    from edu.cmu.tetrad.util import Version as _V
+    print('Tetrad jar version:', str(_V.currentViewableVersion()))
+except Exception: print('Tetrad jar version: unknown')
+"), error = function(e) invisible(NULL)))
+
+# ---- TIER-MARK GUARD --------------------------------------------------------
+# The tiers are hard knowledge: on any edge between nodes of different tiers,
+# the mark at the LATER-tier node must be an arrowhead (the later node cannot
+# be an ancestor of the earlier one in any tier-consistent MAG). A circle
+# there means the search failed to apply knowledge it was given; the repair
+# (circle -> arrowhead) is sound in every tier-consistent MAG. A tail there
+# contradicts the tiers outright. amat coding: amat[i, j] = mark at j.
+tier_of_node <- function(nm)
+  ifelse(grepl("^W", nm), 1L, ifelse(nm == "X1", 2L, ifelse(nm == "X2", 3L, 4L)))
+tier_guard_tally <- new.env()
+tier_guard_tally$stamps <- 0L; tier_guard_tally$conflicts <- 0L
+check_tier_marks <- function(amat) {
+  nm <- rownames(amat); tiers <- tier_of_node(nm)
+  stamps <- 0L; conflicts <- 0L
+  for (a in 1:(nrow(amat) - 1)) for (b in (a + 1):ncol(amat)) {
+    if (amat[a, b] == 0 && amat[b, a] == 0) next
+    if (tiers[a] == tiers[b]) next
+    later <- if (tiers[a] < tiers[b]) b else a
+    other <- if (tiers[a] < tiers[b]) a else b
+    m <- amat[other, later]                     # mark at the later-tier node
+    if (m == 1) { stamps <- stamps + 1L; amat[other, later] <- 2L }
+    else if (m == 3) conflicts <- conflicts + 1L
+  }
+  list(amat = amat, stamps = stamps, conflicts = conflicts)
+}
+tier_guard_report <- function()
+  cat(sprintf(paste0("tier-mark guard: %d repaired mark(s), %d conflict(s) ",
+                     "across all data-arm PAGs (both should be 0 on a ",
+                     "correct Tetrad/causalDisco)\n"),
+      tier_guard_tally$stamps, tier_guard_tally$conflicts))
   # warm-up (deterministic data, NO RNG consumed) so the JVM boot does not
   # land in the first dataset's recorded runtime
   dummy <- as.data.frame(matrix(sin(1:80), 20, 4))
@@ -330,6 +386,16 @@ gt_pag_has_set <- function(A) {
     stop("latent nodes leaked into the ground-truth PAG; check the MsepTest ",
          "import path in the python block")
   amat <- tetrad_string_to_amat(txt)
+  chk <- check_tier_marks(amat)
+  if (chk$stamps > 0 || chk$conflicts > 0)
+    stop("SCREEN GUARD: the Tetrad in use returned an oracle tiered PAG with ",
+         chk$stamps, " missing tier-forced arrowhead(s) and ", chk$conflicts,
+         " tier-conflicting tail(s), so its handling of tiered background ",
+         "knowledge cannot be trusted and the Setting 1/2 screen would be ",
+         "corrupted. Upgrade the py-tetrad installation (the bundled Tetrad ",
+         "jar must apply tiered knowledge; version 7.6.11 is verified) and ",
+         "rerun:\n",
+         "  pip install --force-reinstall git+https://github.com/cmu-phil/py-tetrad")
   # cheap necessary condition before the dagitty call: amenability requires a
   # visible edge out of each treatment toward Y, so a circle mark at either
   # treatment on its Y-edge (or a missing X-Y edge with no possibly-directed
@@ -570,6 +636,10 @@ fci_gac <- function(dat, tiers = TRUE) {
     amat[to,   from] <- mark_left(L)
     amat[from, to]   <- mark_right(R)
   }
+  chk <- check_tier_marks(amat)       # tier-mark guard: repair + tally
+  tier_guard_tally$stamps <- tier_guard_tally$stamps + chk$stamps
+  tier_guard_tally$conflicts <- tier_guard_tally$conflicts + chk$conflicts
+  amat <- chk$amat
   res <- pag_decision(amat)
   res$ntests <- wrapped$ntests       # exact via the cor_test trace
   res
@@ -599,6 +669,10 @@ tetrad_gac <- function(dat, algo = c("gfci", "fci")) {
     tetrad_string_to_amat(paste(out$graph, collapse = "\n")),
     error = function(e) NULL)
   if (is.null(amat)) return(list(outcome = "unknown", ntests = out$count))
+  chk <- check_tier_marks(amat)       # tier-mark guard: repair + tally
+  tier_guard_tally$stamps <- tier_guard_tally$stamps + chk$stamps
+  tier_guard_tally$conflicts <- tier_guard_tally$conflicts + chk$conflicts
+  amat <- chk$amat
   res <- pag_decision(amat)           # same decision rule + dagitty certifier
   res$ntests <- out$count             # exact, via the counting proxy
   res
@@ -917,3 +991,4 @@ cat(sprintf(
   R1_ALPHA_DEP, R1_ALPHA_IND, COMP_ALPHA, SCREENING, SCREEN_KNOWLEDGE))
 cat("NOTE: all runs share identical graphs and datasets (same RNG stream),\n",
     "so any arm with unchanged settings must reproduce exactly across runs.\n")
+tier_guard_report()

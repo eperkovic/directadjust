@@ -133,6 +133,29 @@ tetrad_string_to_amat <- function(txt, obs_name) {
   amat
 }
 
+# ---- TIER-MARK GUARD, as in jci_simulation_rebuild.R ----------------------
+# On any edge between tiers, the mark at the LATER-tier node must be an
+# arrowhead. Repairs circles (sound), counts tail conflicts, and tallies how
+# often the search needed repair; a nonzero tally means a deficient build.
+tier_guard_tally <- new.env(); tier_guard_tally$stamps <- 0L
+tier_guard_tally$conflicts <- 0L
+check_tier_marks <- function(amat) {
+  nm <- rownames(amat)
+  tiers <- ifelse(grepl("^W", nm), 1L,
+           ifelse(nm == "X1", 2L, ifelse(nm == "X2", 3L, 4L)))
+  for (a in 1:(nrow(amat) - 1)) for (b in (a + 1):ncol(amat)) {
+    if (amat[a, b] == 0 && amat[b, a] == 0) next
+    if (tiers[a] == tiers[b]) next
+    later <- if (tiers[a] < tiers[b]) b else a
+    other <- if (tiers[a] < tiers[b]) a else b
+    m <- amat[other, later]
+    if (m == 1) { tier_guard_tally$stamps <- tier_guard_tally$stamps + 1L
+                  amat[other, later] <- 2L }
+    else if (m == 3) tier_guard_tally$conflicts <- tier_guard_tally$conflicts + 1L
+  }
+  amat
+}
+
 # decision + GAC set listing (the certification component, timed as "y").
 # Mirrors pag_decision in the rebuild, generalized to nW; dagitty certifier.
 pag_cert <- function(amat, nW) {
@@ -288,7 +311,7 @@ run_for_W <- function(nW) {
       amat[to,   from] <- mark_left(substr(e, 1, 1))
       amat[from, to]   <- mark_right(substr(e, nchar(e), nchar(e)))
     }
-    amat
+    check_tier_marks(amat)
   }
   tetrad_search <- function(dat, algo) {
     d2 <- as.data.frame(dat); colnames(d2) <- obs_name
@@ -298,8 +321,9 @@ run_for_W <- function(nW) {
       reticulate::py$tetrad_run(reticulate::r_to_py(d2), 0.05, tiers_nw, algo),
       error = function(e) { cat("  [tetrad]", conditionMessage(e), "\n"); NULL })
     if (is.null(out)) return(NULL)
-    tryCatch(tetrad_string_to_amat(paste(out$graph, collapse = "\n"), obs_name),
+    amat <- tryCatch(tetrad_string_to_amat(paste(out$graph, collapse = "\n"), obs_name),
              error = function(e) NULL)
+    if (is.null(amat)) NULL else check_tier_marks(amat)
   }
   gfci_search  <- function(dat) tetrad_search(dat, "gfci")
   tfciT_search <- function(dat) tetrad_search(dat, "fci")
@@ -348,6 +372,8 @@ run_for_W <- function(nW) {
 
 res8 <- do.call(rbind, lapply(W_COUNTS, run_for_W))
 saveRDS(res8, "jci_fig8_times.rds")
+cat(sprintf("tier-mark guard: %d repaired mark(s), %d conflict(s) (both should be 0 on a correct build)\n",
+            tier_guard_tally$stamps, tier_guard_tally$conflicts))
 
 summ <- do.call(rbind, by(res8, list(res8$nW, res8$method), function(d)
   data.frame(nW = d$nW[1], method = d$method[1],

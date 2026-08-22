@@ -1,4 +1,4 @@
-directadjust simulation environment, captured 2026-08-13 14:37 CEST
+directadjust simulation environment (corrected run), captured 2026-08-22 20:42 CEST
 ----------------------------------------------------------------------
 
 ## R
@@ -8,7 +8,7 @@ Platform: aarch64-apple-darwin20
 
 ## R packages
 
-directadjust   NOT INSTALLED
+directadjust   0.2.1
 pcalg          2.7.12
 dagitty        0.3.4
 ggplot2        4.0.2
@@ -20,15 +20,27 @@ knitr          1.51
 rmarkdown      2.30
 testthat       3.3.2
 
-## Python / py-tetrad
+## Python / py-tetrad / Tetrad
 
-python:    /Users/ema/.virtualenvs/r-tetrad/bin/python
-version:   3.12
-py-tetrad: 0.1.2
+python:            r-tetrad virtualenv (see py-tetrad setup notes)
+python version:    3.12.13
+py-tetrad package: 0.1.2  (NOTE: this version string never changes upstream;
+                   identify the engine by the jar below)
+Tetrad version:    7.6.11-0
+Tetrad jar:        pytetrad/resources/tetrad-current.jar (in the py-tetrad install)
+jar size (bytes):  55564387
+jar SHA-256:       40bfeb958f170d6f6cbd21f9221f6021fedb43985e63d1f84c24bc4c95ac04cd
 
 ## Java
 
 openjdk version "21.0.11" 2026-04-21 LTS
 OpenJDK Runtime Environment Corretto-21.0.11.10.1 (build 21.0.11+10-LTS)
 OpenJDK 64-Bit Server VM Corretto-21.0.11.10.1 (build 21.0.11+10-LTS, mixed mode, sharing)
-JAVA_HOME: /Users/ema/Library/Caches/org.R-project.R/R/rJavaEnv/installed/macos/aarch64/21
+
+## Simulation configuration (inst/simulation/jci_simulation_rebuild.R)
+
+seed 20260716; N_MODELS 100/setting; n in {100, 1000, 10000}
+R1 dep <= 0.05, R1 indep > 0.05, comparison alpha 0.05
+screening: pag/paper (oracle tiered PAG via Tetrad MsepTest FCI + dagitty)
+tier-mark guard: verifies every knowledge-forced endpoint mark on every
+  returned graph; this run reported 0 repaired marks, 0 conflicts

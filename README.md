@@ -136,8 +136,16 @@ reticulate::virtualenv_create("r-tetrad", version = "3.11:latest")
 reticulate::virtualenv_install("r-tetrad", "py-tetrad")
 ```
 
-`py-tetrad` bundles the Tetrad jar it runs, so its pip version pins the
-Tetrad version.
+`py-tetrad` bundles the Tetrad jar it runs, but its pip version string
+does NOT identify that jar (it has read `0.1.2` across many different
+bundled engines). Identify the engine by the jar itself: its reported
+version, byte size, and SHA-256 are recorded in `session_info.txt` (this
+run: Tetrad 7.6.11). Install fresh with
+`pip install --force-reinstall git+https://github.com/cmu-phil/py-tetrad`.
+The simulation scripts verify every endpoint mark implied by the tiered
+background knowledge on every graph the search returns and halt if the
+installed Tetrad drops any, so a deficient build cannot silently produce
+results.
 
 **3. Record the exact versions.** After a successful run, snapshot the
 environment next to the results:
